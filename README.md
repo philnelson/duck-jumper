@@ -1,3 +1,5 @@
+![Duck Jumper cassette](https://raw.githubusercontent.com/philnelson/duck-jumper/master/tape_small.jpg)
+
 # Before you ask
 
 Yep, I will respond to [Issues](https://github.com/philnelson/duck-jumper/issues) and [Pull requests](https://github.com/philnelson/duck-jumper/pulls).
