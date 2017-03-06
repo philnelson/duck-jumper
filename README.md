@@ -1,6 +1,6 @@
 # What is this
 
-Duck Jumper (AKA as "Cyber Fowl Hopper" in parts of Europe) was originally released in February 1987 for the EXTRAGAME 20-in-1 home console. Due to extremely limited graphics, sound, and game play it was taken off of the market in March 1987 and promptly disposed of in a Wyoming landfill.
+Duck Jumper (AKA as "Cyber Fowl Hopper" in parts of Europe, and simply "Jump!! With Duck" in Japan) was originally released in February 1987 for the EXTRAGAME 20-in-1 home console. Due to extremely limited graphics, sound, and game play it was taken off of the market in March 1987 and promptly disposed of in a Wyoming landfill.
 
 # How to run
 
