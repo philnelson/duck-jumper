@@ -18,8 +18,8 @@ function love.load()
     jump = love.graphics.newImage("assets/jump.png")
     splash = love.graphics.newImage("assets/splash.png")
 
-    splash_sound = love.audio.newSource("assets/splash.wav", "static")
-    jump_sound = love.audio.newSource("assets/jump.wav", "static")
+    splash_sound = love.audio.newSource("assets/splash_lo.wav", "static")
+    jump_sound = love.audio.newSource("assets/jump_lo.wav", "static")
 
     reset_level()
 end
@@ -200,7 +200,7 @@ function draw_jump()
 			player.altitude = player.altitude + .05
 		end
 
-		if player.altitude >= 2 then
+		if player.altitude >= 1.5 then
 			player.jump = "down"
 		end
 
