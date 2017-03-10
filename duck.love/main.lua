@@ -1,4 +1,7 @@
 function love.load()
+	min_dt = 1/12 --fps
+ 	next_time = love.timer.getTime()
+ 	timer_tickdown = 0
 	last_button = "none"
 	local joysticks = love.joystick.getJoysticks()
     joystick = joysticks[1]
@@ -20,6 +23,7 @@ function love.load()
 
     splash_sound = love.audio.newSource("assets/splash_lo.wav", "static")
     jump_sound = love.audio.newSource("assets/jump_lo.wav", "static")
+    death_music = love.audio.newSource("assets/death.wav", "static")
 
     reset_level()
 end
@@ -35,10 +39,8 @@ function reset_level()
     map_y_offset = 40
     tile_w = 60
     tile_h = 40
-    current_level = 1
 
-    speed = 1
-    player_speed = 1.5
+    game_status = {deaths=0, time=0, level = 1, speed = 1, jumps = 0, time_left = 90}
 
     -- build out map
     print("Building map...")
@@ -50,13 +52,13 @@ function reset_level()
        end
     end
 
-    for y=1, 3 do
+    for y=1, 2 do
        for x=1, map_w do
           map[y][x] = 1
        end
     end
 
-    for y=14, map_h do
+    for y=15, map_h do
        for x=1, map_w do
           map[y][x] = 1
        end
@@ -65,42 +67,50 @@ function reset_level()
     print("Map is " .. map_w .. " wide by " .. map_h .. " tall")
 
     print("Map built.")
-	set_up_level(current_level)
+	set_up_level(game_status.level)
 
-    player = {location = {x = 0, y = 600}, rotation = 0, scale = 4, altitude = 1, status = "alive", opacity = 1, is_colliding = false, jump=false}
+    player = {location = {x = 0, y = 600}, lateral_speed = 1.2, forward_speed = 1.2, back_speed = .8, rotation = 0, scale = 4, altitude = 1, status = "alive", opacity = 1, is_colliding = false, jump=false}
 end
 
 function love.update(dt)
-
+	timer_tickdown = timer_tickdown + min_dt
 	
 	check_collisions(dt)
 	update_ducks()
 
-	if player.status ~= "dead" then
+	check_player_input(dt)
+
+	if timer_tickdown > 1 then 
+		game_status.time_left = game_status.time_left - 1
+		timer_tickdown = 0
+	end
+end
+
+function check_player_input(dt)
+if player.status ~= "dead" then
 		if love.keyboard.isDown("right") then
-	        player.location.x = player.location.x + (1*player_speed)
+	        player.location.x = player.location.x + (1*player.lateral_speed)
 	        return;
 	    end
 
 	    if love.keyboard.isDown("left") then
-	        player.location.x = player.location.x - (1*player_speed)
+	        player.location.x = player.location.x - (1*player.lateral_speed)
 	        return;
 	    end
 
 		if love.keyboard.isDown("up") then
-	        player.location.y = player.location.y - (1*player_speed)
+	        player.location.y = player.location.y - (1*player.forward_speed)
 	        return;
 	    end
 
 	    if love.keyboard.isDown("down") then
-	        player.location.y = player.location.y + (1*player_speed)
+	        player.location.y = player.location.y + (1*player.back_speed)
 	        return;
 	    end
 	end
 end
 
 function set_up_level(current_level)
-	--map[1] = duck_layouts[0]
 	add_ducks(current_level)
 end
 
@@ -117,9 +127,40 @@ end
 
 function love.draw()
 	draw_map()
+	draw_ui()
 	draw_effects()
 	draw_ducks()
 	draw_jump()
+
+	if player.status == "dead" then
+		width = love.graphics.getWidth( )
+		height = love.graphics.getHeight( )
+		love.graphics.setColor(0, 0, 0, 200)
+	    love.graphics.rectangle( 'fill', 0, 0,  width, height)
+	    love.graphics.setColor(255, 255, 255, 255)
+	    love.graphics.print("U DED! PRESS 'R' TO RESTART?", ui_font:getWidth("U DED! PRESS 'R' TO RESTART?")/2.2, height/2)
+	end
+
+
+	local cur_time = love.timer.getTime()
+	if next_time <= cur_time then
+		next_time = cur_time
+		return
+	end
+	love.timer.sleep(next_time - cur_time)
+end
+
+function draw_ui()
+	love.graphics.setColor(255, 255, 255, 255)
+	love.graphics.print("JUMPS", 10, 2)
+	love.graphics.print(game_status.jumps, 10+ui_font:getWidth("JUMPS "), 2)
+
+	love.graphics.print("DEATHS", 150, 2)
+	love.graphics.print(game_status.deaths, 150+ui_font:getWidth("DEATHS "), 2)
+
+
+	love.graphics.print("TIME", 300, 2)
+	love.graphics.print(game_status.time_left, 300+ui_font:getWidth("TIME "), 2)
 end
 
 function calculate_map_position_from_screen_coordinates(x,y)
@@ -194,7 +235,7 @@ end
 
 function draw_jump()
 	if player.jump ~= false then
-		player_speed = 3
+		player.forward_speed = 3
 
 		if player.jump == "up" then
 			player.altitude = player.altitude + .05
@@ -211,6 +252,7 @@ function draw_jump()
 		if player.altitude < 1 then 
 			player.altitude = 1
 			player.jump = false
+			player.forward_speed = 1.2
 		end
 	end
 
@@ -229,18 +271,18 @@ function draw_effects()
 	end
 end
 
-function check_collisions()
+function check_collisions(dt)
 
 	collided = false
 
-	if player.location.y+20 >= (14 * tile_h) or player.location.y <= 3 * tile_h then
+	if player.location.y+20 >= (15 * tile_h) or player.location.y-20 <= 2 * tile_h then
 		
 	else
 		for i=1, #npcs do
 			if npcs[i].type == "duck" then
 
 				if collides_with(player.location.x, player.location.y, 60, 40, npcs[i].location.x, npcs[i].location.y, 60, 40) then
-					player.location.x = player.location.x + speed
+					player.location.x = player.location.x + game_status.speed
 					collided = true
 					return;
 				else
@@ -249,15 +291,19 @@ function check_collisions()
 			end
 		end
 
-		if collided == false and player.jump == false and player.status ~= "dead" then
+		if collided == false and player.jump == false and player.status == "alive" then
 			splash_sound:play()
 			create_splash(player.location.x, player.location.y)
 			player.status = "dead"
+
+			death_music:play()
+
+			game_status.deaths = game_status.deaths + 1
 		end
 	end
 
 	if player.location.x == 2 then
-
+		player.status = "won"
 	end
 end
 
@@ -265,7 +311,7 @@ function update_ducks(dt)
 	for i=1, #npcs do
 		if npcs[i].type == "duck" then
 
-			npcs[i].location.x = npcs[i].location.x + (1*speed)
+			npcs[i].location.x = npcs[i].location.x + (1*game_status.speed)
 
 			if(npcs[i].location.x == 720) then
 				npcs[i].location.x = 0
@@ -278,19 +324,19 @@ function update_ducks(dt)
 
 			print(npcs[i].location.y)
 			if(npcs[i].location.y == tile_h*2) then
-				npcs[i].location.x = npcs[i].location.x + (1*speed)
+				npcs[i].location.x = npcs[i].location.x + (1*game_status.speed)
 			end
 
 			if(npcs[i].location.x == 720) then
-				npcs[i].location.y = npcs[i].location.y + (1*speed)
+				npcs[i].location.y = npcs[i].location.y + (1*game_status.speed)
 			end
 
 			if(npcs[i].location.y == (tile_h*map_h)-40) then
-				npcs[i].location.x = npcs[i].location.x - (1*speed)
+				npcs[i].location.x = npcs[i].location.x - (1*game_status.speed)
 			end
 
 			if(npcs[i].location.x == 0) then
-				npcs[i].location.y = npcs[i].location.y - (1*speed)
+				npcs[i].location.y = npcs[i].location.y - (1*game_status.speed)
 			end
 
 			love.graphics.draw( duck, npcs[i].location.x, npcs[i].location.y, 0, 4, 4)
@@ -299,9 +345,13 @@ function update_ducks(dt)
 end
 
 function love.keypressed(key)
+
+if player.status == "alive" then
    if key == "space" then
+   		game_status.jumps = game_status.jumps + 1
       player_jump()
    end
+end
 
    if key == "r" then
    		reset_level()
