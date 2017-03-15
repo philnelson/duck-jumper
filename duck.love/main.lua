@@ -1,10 +1,12 @@
 function love.load()
-	min_dt = 1/12 --fps
+	min_dt = 1/60 --fps
  	next_time = love.timer.getTime()
  	timer_tickdown = 0
 	last_button = "none"
 	local joysticks = love.joystick.getJoysticks()
     joystick = joysticks[1]
+
+    current_screen = "start"
 
 	math.randomseed( os.time() )
 
@@ -23,12 +25,18 @@ function love.load()
 
     splash_sound = love.audio.newSource("assets/splash_lo.wav", "static")
     jump_sound = love.audio.newSource("assets/jump_lo.wav", "static")
+    jump_land_sound = love.audio.newSource("assets/jump_land.wav", "static")
     death_music = love.audio.newSource("assets/death.wav", "static")
+    win_music = love.audio.newSource("assets/won.wav", "static")
+    start_level_music = love.audio.newSource("assets/start_level.wav", "static")
+    reset_level_music = love.audio.newSource("assets/reset_level.wav", "static")
 
-    reset_level()
+    game_status = {deaths=0, time=0, level = 0, speed = 1, jumps = 0, time_left = 90}
+
+    reset_level("startup")
 end
 
-function reset_level()
+function reset_level(reason)
 	map = {}
 	npcs = {}
 	effects = {}
@@ -40,7 +48,18 @@ function reset_level()
     tile_w = 60
     tile_h = 40
 
-    game_status = {deaths=0, time=0, level = 1, speed = 1, jumps = 0, time_left = 90}
+    game_status.time = 0;
+
+    if reason == "won" then
+    	game_status.level = game_status.level + 1;
+    	game_status.speed = game_status.speed;
+	else
+		game_status.level = 1;
+		game_status.speed = 1;
+		game_status.jumps = 0;
+	end
+
+    game_status.time_left = 90;
 
     -- build out map
     print("Building map...")
@@ -67,44 +86,48 @@ function reset_level()
     print("Map is " .. map_w .. " wide by " .. map_h .. " tall")
 
     print("Map built.")
+
 	set_up_level(game_status.level)
 
-    player = {location = {x = 0, y = 600}, lateral_speed = 1.2, forward_speed = 1.2, back_speed = .8, rotation = 0, scale = 4, altitude = 1, status = "alive", opacity = 1, is_colliding = false, jump=false}
+    player = {location = {x = 360, y = 660}, lateral_speed = 1.2, forward_speed = 1.2, back_speed = 1.2, rotation = 0, scale = 4, altitude = 1, status = "alive", opacity = 1, is_colliding = false, jump=false}
 end
 
 function love.update(dt)
 	timer_tickdown = timer_tickdown + min_dt
 	
 	check_collisions(dt)
-	update_ducks()
+	update_ducks(dt)
 
 	check_player_input(dt)
 
 	if timer_tickdown > 1 then 
-		game_status.time_left = game_status.time_left - 1
+		game_status.time = game_status.time + 1
 		timer_tickdown = 0
 	end
 end
 
 function check_player_input(dt)
-if player.status ~= "dead" then
+if player.status == "alive" and current_screen ~= "start" then
 		if love.keyboard.isDown("right") then
-	        player.location.x = player.location.x + (1*player.lateral_speed)
+	        player.location.x = player.location.x + ( (1*player.lateral_speed) * (game_status.speed) )
 	        return;
 	    end
 
 	    if love.keyboard.isDown("left") then
-	        player.location.x = player.location.x - (1*player.lateral_speed)
+	        player.location.x = player.location.x - ((1*player.lateral_speed) * (game_status.speed))
+	        if player.is_colliding == true then
+	        	player.location.x = player.location.x - 1;
+	        end
 	        return;
 	    end
 
 		if love.keyboard.isDown("up") then
-	        player.location.y = player.location.y - (1*player.forward_speed)
+	        player.location.y = player.location.y - ( (1*player.forward_speed) * (game_status.speed) )
 	        return;
 	    end
 
 	    if love.keyboard.isDown("down") then
-	        player.location.y = player.location.y + (1*player.back_speed)
+	        player.location.y = player.location.y + ( (1*player.back_speed) * (game_status.speed) )
 	        return;
 	    end
 	end
@@ -118,7 +141,7 @@ function add_ducks(current_level)
 	for x=1, map_w do
 		for y=1, map_h-8 do
 			screen_x, screen_y = calculate_screen_position_from_map_coordinates(x,y)
-			if (math.random(0,1) == 1) then
+			if (math.random(1,20) > (9+(current_level/2)) ) then
 				npcs[#npcs+1] = {type = "duck", name = "duck", opacity = 1, location = {x = screen_x, y = screen_y+(tile_h*3)}}
 			end
 		end
@@ -132,22 +155,51 @@ function love.draw()
 	draw_ducks()
 	draw_jump()
 
-	if player.status == "dead" then
-		width = love.graphics.getWidth( )
-		height = love.graphics.getHeight( )
-		love.graphics.setColor(0, 0, 0, 200)
-	    love.graphics.rectangle( 'fill', 0, 0,  width, height)
-	    love.graphics.setColor(255, 255, 255, 255)
-	    love.graphics.print("U DED! PRESS 'R' TO RESTART?", ui_font:getWidth("U DED! PRESS 'R' TO RESTART?")/2.2, height/2)
+	if current_screen == "start" then
+		draw_start_screen()
+	else
+
+		if player.status == "dead" then
+			width = love.graphics.getWidth( )
+			height = love.graphics.getHeight( )
+			love.graphics.setColor(0, 0, 0, 200)
+		    love.graphics.rectangle( 'fill', 0, 0,  width, height)
+		    love.graphics.setColor(255, 255, 255, 255)
+		    love.graphics.print("YOU DROWNED! PRESS 'R' TO RESTART?", width-(ui_font:getWidth("YOU DROWNED! PRESS 'R' TO RESTART?")*1.2), height/2)
+		end
+
+		if player.status == "won" then
+			width = love.graphics.getWidth( )
+			height = love.graphics.getHeight( )
+			love.graphics.setColor(0, 0, 0, 200)
+		    love.graphics.rectangle( 'fill', 0, 0,  width, height)
+		    love.graphics.setColor(255, 255, 255, 255)
+		    love.graphics.print("YOU MADE IT! A NEW CHALLENGE AWAITS.", 100, height/2)
+		    love.graphics.print("PRESS 'R' TO JUMP ON MORE DUCKS", 100, (height/2)+25)
+		end
 	end
 
+	--local cur_time = love.timer.getTime()
+	--if next_time <= cur_time then
+	--	next_time = cur_time
+	--	return
+	--end
+	--love.timer.sleep(next_time - cur_time)
+end
 
-	local cur_time = love.timer.getTime()
-	if next_time <= cur_time then
-		next_time = cur_time
-		return
-	end
-	love.timer.sleep(next_time - cur_time)
+function draw_start_screen()
+	width = love.graphics.getWidth( )
+	height = love.graphics.getHeight( )
+	love.graphics.setColor(0, 0, 0, 220)
+    love.graphics.rectangle( 'fill', 0, 0,  width, height)
+    love.graphics.setColor(255, 255, 255, 255)
+    love.graphics.print("HOW TO DUCK JUMP:", 200, 200)
+    love.graphics.print("PRESS 'SPACE' TO JUMP.", 200, 250)
+    love.graphics.print("USE ARROW KEYS TO MOVE.", 200, 300)
+
+    love.graphics.print("PUSH 'R' TO START THE GAME.", 200, 400)
+
+    love.graphics.print("@philnelson / extrafuture.com", 200, 600)
 end
 
 function draw_ui()
@@ -159,8 +211,8 @@ function draw_ui()
 	love.graphics.print(game_status.deaths, 150+ui_font:getWidth("DEATHS "), 2)
 
 
-	love.graphics.print("TIME", 300, 2)
-	love.graphics.print(game_status.time_left, 300+ui_font:getWidth("TIME "), 2)
+	love.graphics.print("LEVEL", 300, 2)
+	love.graphics.print(game_status.level, 300+ui_font:getWidth("LEVEL "), 2)
 end
 
 function calculate_map_position_from_screen_coordinates(x,y)
@@ -235,13 +287,19 @@ end
 
 function draw_jump()
 	if player.jump ~= false then
+
+		love.graphics.setColor(0, 0, 0, 200)
+		love.graphics.circle( "fill", player.location.x+30, player.location.y+10, 10 )
+		love.graphics.setColor(255, 255, 255, 255)
+		
 		player.forward_speed = 3
+		player.back_speed = 3
 
 		if player.jump == "up" then
 			player.altitude = player.altitude + .05
 		end
 
-		if player.altitude >= 1.5 then
+		if player.altitude >= 1.7 then
 			player.jump = "down"
 		end
 
@@ -253,10 +311,12 @@ function draw_jump()
 			player.altitude = 1
 			player.jump = false
 			player.forward_speed = 1.2
+			player.back_speed = 1.2
+			jump_land_sound:play()
 		end
 	end
 
-	if player.status ~= "dead" then
+	if player.status == "alive" then
 		love.graphics.draw(jump, player.location.x, player.location.y, player.rotation , player.scale*player.altitude, player.scale*player.altitude)
 	end
 end
@@ -276,7 +336,12 @@ function check_collisions(dt)
 	collided = false
 
 	if player.location.y+20 >= (15 * tile_h) or player.location.y-20 <= 2 * tile_h then
-		
+		if player.location.y-20 <= 2 * tile_h then
+			if player.jump == false then
+				player.status = "won"
+				win_music:play()
+			end
+		end
 	else
 		for i=1, #npcs do
 			if npcs[i].type == "duck" then
@@ -284,9 +349,10 @@ function check_collisions(dt)
 				if collides_with(player.location.x, player.location.y, 60, 40, npcs[i].location.x, npcs[i].location.y, 60, 40) then
 					player.location.x = player.location.x + game_status.speed
 					collided = true
+					player.is_colliding = true
 					return;
 				else
-					
+					player.is_colliding = false
 				end
 			end
 		end
@@ -296,14 +362,11 @@ function check_collisions(dt)
 			create_splash(player.location.x, player.location.y)
 			player.status = "dead"
 
+			death_music:setVolume(0.4)
 			death_music:play()
 
 			game_status.deaths = game_status.deaths + 1
 		end
-	end
-
-	if player.location.x == 2 then
-		player.status = "won"
 	end
 end
 
@@ -346,15 +409,31 @@ end
 
 function love.keypressed(key)
 
-if player.status == "alive" then
-   if key == "space" then
-   		game_status.jumps = game_status.jumps + 1
-      player_jump()
-   end
-end
+	if player.status == "alive" and current_screen ~= "start" then
+	   if key == "space" then
+	   		game_status.jumps = game_status.jumps + 1
+	    	player_jump()
+	   end
+	end
 
    if key == "r" then
-   		reset_level()
+
+   		if current_screen == "start" then
+   			current_screen = "level"
+   		else
+
+	   		if player.status == "won" then
+	   			start_level_music:play()
+	   			reset_level("won")
+	   		elseif player.status == "dead" then
+	   			start_level_music:play()
+	   			reset_level("dead")
+	   		else
+	   			reset_level_music:play()
+	   			reset_level("random")
+	   		end
+	   	end
+  
    end
 end
 
